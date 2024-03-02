@@ -198,3 +198,57 @@ return GroupBy(pumpType, ['Office_Type'],
 ```
 
 The feature set returns a single row table with USACE wide materiel category counts and lengths totals.
+
+** Calculate percent of total
+
+The start of code to attach percent of usace total for each materiel type
+
+```js
+// Write an expression that returns a FeatureSet.
+// Documentation: https://arcg.is/3c419TD
+// Samples: https://arcg.is/38SEWWz
+
+var uCOP = portal("https://arcportal-ucop-corps.usace.army.mil/s0portal");
+
+var uDIV = FeatureSetByPortalItem(uCOP, 
+'8a16765777c44e8f9263323ddd463028', 
+0, 
+["*"], false);
+
+var usace = GroupBy(uDIV, ['USACE_OFFICE_TYPE'], [
+    {name: 'totsbag', expression: 'SANDBAG_CT', statistic: 'SUM'},
+    {name: 'totpmp', expression: 'PUMP_TOTAL_CT', statistic: 'SUM'}])
+
+var tot_sbag = First(usace)
+var sbag = tot_sbag.totsbag
+var pmp = tot_sbag.totpmp
+
+
+var features = []
+var feat
+
+for (var d in uDIV) {
+    feat = {
+        attributes: {
+            sandbag: d['SANDBAG_CT'],
+            sandbag_pct: round((d['SANDBAG_CT']/sbag)*100,1),
+            pump: d['PUMP_TOTAL_CT'],
+            pump_pct: round((d['PUMP_TOTAL_CT']/pmp)*100,1)
+        }
+    }
+    push(features, feat)
+}
+
+var combinedDict = {
+    fields: [
+        {name: 'sandbag', type: 'esriFieldTypeDouble'},
+        {name: 'sandbag_pct', type: 'esriFieldTypeDouble'},
+        {name: 'pump', type: 'esriFieldTypeDouble'},
+        {name: 'pump_pct', type: 'esriFieldTypeDouble'}
+    ],
+    geometryType: '',
+    features: features,
+}
+
+return FeatureSet(Text(combinedDict))
+```
