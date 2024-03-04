@@ -308,3 +308,15 @@ var combinedDict = {
 // Convert dictionary to FeatureSet
 return FeatureSet(Text(combinedDict))
 ```
+
+## HEX Colors for chart
+
+Listed in order of how they appear on the division chart
+6e0505
+a65f12
+d5a700
+445426
+9aab77
+6080b0
+052748
+d4aaaa
