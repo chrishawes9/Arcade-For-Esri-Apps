@@ -106,10 +106,13 @@ To complement the Division totals, a USACE-wide data expression was created. It 
 // Define portal and web feature layer
 var uCOP = portal("https://arcportal-ucop-corps.usace.army.mil/s0portal");
 
-var uDIV = FeatureSetByPortalItem(uCOP, 
+var uDIVr = FeatureSetByPortalItem(uCOP, 
 '8a16765777c44e8f9263323ddd463028', 
 0, 
 ["*"], false);
+
+// Filter out second (duplicate) MVD record
+var uDIV = Filter(uDIVr, 'USACE_OFFICE_ID <> 160')
 
 // Set up feature object and array to store multiple feature objects
 var features = [];
@@ -123,40 +126,43 @@ for (var p in uDIV) {
     var oTYPE = p["USACE_OFFICE_TYPE"]
     var sBAG = p["SANDBAG_CT"]
     var ssBAG = p["SUPER_SANDBAG_CT"]
+    var asbgr = p["SANDBAG_FILL_MACHINE_CT"]
     var aBAG = p["AIRLIFT_SANDBAG_CT"]
     var gBAS = p["GABION_BASKET_LEN"]
     var pSHT = p["POLY_SHEETING_LEN"]
     var tPMP = p["PUMP_TOTAL_CT"]
     var pCFD = p["PORT_COFFER_DAM_LEN"]
+
     feat = {
         attributes: {
             Division: divID,
-	    Office_Name: oNAME,
-	    Office_Type: oTYPE,
-	    Sandbag_CT: sBAG,
-	    Airlift_Sandbag_CT: aBAG,
-	    Super_Sandbag_CT: ssBAG,
-	    Gabion_Basket_LNFT: gBAS,
-	    Poly_Sheeting_LNFT: pSHT,
-	    Portable_Coffer_Dam_LNFT: pCFD,
-	    Total_Pumps_CT: tPMP,
+	        Office_Name: oNAME,
+	        Office_Type: oTYPE,
+	        Sandbag_CT: sBAG,
+	        Airlift_Sandbag_CT: aBAG,
+	        Super_Sandbag_CT: ssBAG,
+            Auto_Sandbagger_CT: asbgr,
+	        Gabion_Basket_LNFT: gBAS,
+	        Poly_Sheeting_LNFT: pSHT,
+	        Portable_Coffer_Dam_LNFT: pCFD,
+	        Total_Pumps_CT: tPMP,
             PTO_Pumps_CT: sum(p["PUMP_8_IN_PTO_CT"], 
                                p["PUMP_10_IN_PTO_CT"], 
                                p["PUMP_12_IN_PTO_CT"], 
                                p["PUMP_16_IN_PTO_CT"],
-    			       p["PUMP_16_IN_PTO_DIESEL_CT"],
-    			       p["PUMP_24_IN_PTO_DIESEL_CT"]),
+    			               p["PUMP_16_IN_PTO_DIESEL_CT"],
+    			               p["PUMP_24_IN_PTO_DIESEL_CT"]),
             Non_PTO_Pumps_CT: sum(p["PUMP_3_IN_GAS_CT"],
                                   P["PUMP_4_IN_DIESEL_CT"],
                                   p["PUMP_4_IN_SUB_ELECTRIC_CT"],
                                   p["PUMP_4_IN_SUB_HYDRAULIC_CT"],
-    			          p["PUMP_6_IN_DIESEL_CT"],
-    			          p["PUMP_6_IN_FLOAT_GAS_CT"],
-    			          p["PUMP_6_IN_SUB_DIESEL_CT"],
-    			          p["PUMP_8_IN_DIESEL_CT"],
-    			          p["PUMP_8_IN_SUB_ELECTRIC_CT"],
-    			          p["PUMP_12_IN_DIESEL_CT"],
-    			          p["PUMP_18_IN_DIESEL_CT"])
+    			                  p["PUMP_6_IN_DIESEL_CT"],
+    			                  p["PUMP_6_IN_FLOAT_GAS_CT"],
+    			                  p["PUMP_6_IN_SUB_DIESEL_CT"],
+    			                  p["PUMP_8_IN_DIESEL_CT"],
+    			                  p["PUMP_8_IN_SUB_ELECTRIC_CT"],
+    			                  p["PUMP_12_IN_DIESEL_CT"],
+    			                  p["PUMP_18_IN_DIESEL_CT"])
             }
         }
     Push(features, feat)
@@ -167,10 +173,11 @@ var outDict = {
     fields: [
     {name: "Division", type: "esriFieldTypeString"},
 	{name: "Office_Name", type: "esriFieldTypeString"},
-	{name: "Office_Type", type: 'esriFieldTypeString"},
+	{name: "Office_Type", type: "esriFieldTypeString"},
 	{name: "Sandbag_CT", type: "esriFieldTypeInteger"},
 	{name: "Airlift_Sandbag_CT", type: "esriFieldTypeInteger"},
 	{name: "Super_Sandbag_CT", type: "esriFieldTypeInteger"},
+    {name: "Auto_Sandbagger_CT", type: "esriFieldTypeInteger"},
 	{name: "Gabion_Basket_LNFT", type: "esriFieldTypeInteger"},
 	{name: "Poly_Sheeting_LNFT", type: "esriFieldTypeInteger"},
 	{name: "Portable_Coffer_Dam_LNFT", type: "esriFieldTypeInteger"},
@@ -189,6 +196,7 @@ return GroupBy(pumpType, ['Office_Type'],
 [{name: "Sandbag_CT", expression: "Sandbag_CT", statistic: "SUM"},
 {name: "Airlift_Sandbag_CT", expression: "Airlift_Sandbag_CT", statistic: "SUM"},
 {name: "Super_Sandbag_CT", expression: "Super_Sandbag_CT", statistic: "SUM"},
+{name: "Auto_Sandbagger_CT", expression: "Auto_Sandbagger_CT", statistic: "SUM"},
 {name: "Gabion_Basket_LNFT", expression: "Gabion_Basket_LNFT", statistic: "SUM"},
 {name: "Poly_Sheeting_LNFT", expression: "Poly_Sheeting_LNFT", statistic: "SUM"},
 {name: "Portable_Coffer_Dam_LNFT", expression: "Portable_Coffer_Dam_LNFT", statistic: "SUM"},
@@ -199,56 +207,104 @@ return GroupBy(pumpType, ['Office_Type'],
 
 The feature set returns a single row table with USACE wide materiel category counts and lengths totals.
 
-** Calculate percent of total
+## Calculate percent of total
 
-The start of code to attach percent of usace total for each materiel type
+Calculate the percent of usace total each division has for each materiel type
 
 ```js
-// Write an expression that returns a FeatureSet.
-// Documentation: https://arcg.is/3c419TD
-// Samples: https://arcg.is/38SEWWz
+// uCOP Prod, ArcGIS Enterprise 11.2, Feb. 2024
+// Create Division percent of USACE total for materiel
+// For use in ArcGIS Dashboard chart and table widgets
+// Returns Feature Set
 
+// Define portal and web layer
 var uCOP = portal("https://arcportal-ucop-corps.usace.army.mil/s0portal");
 
-var uDIV = FeatureSetByPortalItem(uCOP, 
+var uDIVr = FeatureSetByPortalItem(uCOP, 
 '8a16765777c44e8f9263323ddd463028', 
 0, 
 ["*"], false);
 
+// Filter out second (duplicate) MVD record
+var uDIV = Filter(uDIVr, 'USACE_OFFICE_ID <> 160')
+
+// Calculate USACE totals of materiel
 var usace = GroupBy(uDIV, ['USACE_OFFICE_TYPE'], [
     {name: 'totsbag', expression: 'SANDBAG_CT', statistic: 'SUM'},
-    {name: 'totpmp', expression: 'PUMP_TOTAL_CT', statistic: 'SUM'}])
+    {name: 'totalbag', expression: 'AIRLIFT_SANDBAG_CT', statistic: 'SUM'},
+    {name: 'totssbag', expression: 'SUPER_SANDBAG_CT', statistic: 'SUM'},
+    {name: 'totsbfill', expression: 'SANDBAG_FILL_MACHINE_CT', statistic: 'SUM'},
+    {name: 'totpsht', expression: 'POLY_SHEETING_LEN', statistic: 'SUM'},
+    {name: 'totgbkt', expression: 'GABION_BASKET_LEN', statistic: 'SUM'},
+    {name: 'totpcfd', expression: 'PORT_COFFER_DAM_LEN', statistic: 'SUM'},
+    {name: 'totpmps', expression: 'PUMP_TOTAL_CT', statistic: 'SUM'}])
 
-var tot_sbag = First(usace)
-var sbag = tot_sbag.totsbag
-var pmp = tot_sbag.totpmp
+// Extact single numeric variables from usace FeatureSet
+var tot_usace = First(usace)
+var sbag = tot_usace.totsbag
+var albag = tot_usace.totalbag
+var ssbag = tot_usace.totssbag
+var sbfill = tot_usace.totsbfill
+var psht = tot_usace.totpsht
+var gbkt = tot_usace.totgbkt
+var pcfd = tot_usace.totpcfd
+var pmps = tot_usace.totpmps
 
-
+// Set up feature object and array to hold multiple feature objects
 var features = []
 var feat
 
+// loop through columns, keeping required columns and calculating percent columns.
 for (var d in uDIV) {
     feat = {
         attributes: {
-            sandbag: d['SANDBAG_CT'],
-            sandbag_pct: round((d['SANDBAG_CT']/sbag)*100,1),
-            pump: d['PUMP_TOTAL_CT'],
-            pump_pct: round((d['PUMP_TOTAL_CT']/pmp)*100,1)
+            DIVISION: d['USACE_DIVISION_CODE'],
+            SANDBAG_CT: d['SANDBAG_CT'],
+            SANDBAG_PCT: round((d['SANDBAG_CT']/sbag)*100,1),
+            AIRLIFT_SANDBAG_CT: d['AIRLIFT_SANDBAG_CT'],
+            AIRLIFT_SANDBAG_PCT: round((d['AIRLIFT_SANDBAG_CT']/albag)*100,1),
+            SUPER_SANDBAG_CT: d['SUPER_SANDBAG_CT'],
+            SUPER_SANDBAG_PCT: round((d['SUPER_SANDBAG_CT']/ssbag)*100,1),
+            SANDBAG_FILL_MACHINE_CT: d['SANDBAG_FILL_MACHINE_CT'],
+            SANDBAG_FILL_MACHINE_PCT: round((d['SANDBAG_FILL_MACHINE_CT']/sbfill)*100,1),
+            POLY_SHEETING_LEN: d['POLY_SHEETING_LEN'],
+            POLY_SHEETING_PCT: round((d['POLY_SHEETING_LEN']/psht)*100,1),
+            GABION_BASKET_LEN: d['GABION_BASKET_LEN'],
+            GABION_BASKET_PCT: round((d['GABION_BASKET_LEN']/gbkt)*100,1),
+            PORT_COFFER_DAM_LEN: d['PORT_COFFER_DAM_LEN'],
+            PORT_COFFER_DAM_PCT: round((d['PORT_COFFER_DAM_LEN']/pcfd)*100,1),
+            PUMP_TOTAL_CT: d['PUMP_TOTAL_CT'],
+            PUMP_TOTAL_PCT: round((d['PUMP_TOTAL_CT']/pmps)*100,1)
         }
     }
     push(features, feat)
 }
 
+// Create dictionary from array of feature objuect
 var combinedDict = {
     fields: [
-        {name: 'sandbag', type: 'esriFieldTypeDouble'},
-        {name: 'sandbag_pct', type: 'esriFieldTypeDouble'},
-        {name: 'pump', type: 'esriFieldTypeDouble'},
-        {name: 'pump_pct', type: 'esriFieldTypeDouble'}
+        {name: 'DIVISION', type: 'esriFieldTypeString'},
+        {name: 'SANDBAG_CT', type: 'esriFieldTypeInteger'},
+        {name: 'SANDBAG_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'AIRLIFT_SANDBAG_CT', type: 'esriFieldTypeInteger'},
+        {name: 'AIRLIFT_SANDBAG_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'SUPER_SANDBAG_CT', type: 'esriFieldTypeInteger'},
+        {name: 'SUPER_SANDBAG_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'SANDBAG_FILL_MACHINE_CT', type: 'esriFieldTypeInteger'},
+        {name: 'SANDBAG_FILL_MACHINE_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'POLY_SHEETING_LEN', type: 'esriFieldTypeInteger'},
+        {name: 'POLY_SHEETING_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'GABION_BASKET_LEN', type: 'esriFieldTypeInteger'},
+        {name: 'GABION_BASKET_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'PORT_COFFER_DAM_LEN', type: 'esriFieldTypeInteger'},
+        {name: 'PORT_COFFER_DAM_PCT', type: 'esriFieldTypeDouble'},
+        {name: 'PUMP_TOTAL_CT', type: 'esriFieldTypeInteger'},
+        {name: 'PUMP_TOTAL_PCT', type: 'esriFieldTypeDouble'}
     ],
     geometryType: '',
     features: features,
 }
 
+// Convert dictionary to FeatureSet
 return FeatureSet(Text(combinedDict))
 ```
