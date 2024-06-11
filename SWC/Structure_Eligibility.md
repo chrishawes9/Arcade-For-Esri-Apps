@@ -18,7 +18,7 @@ var uApps = FeatureSetByPortalItem(uCOP,
 0,
 ["priority_group", "project_eligibility_status", "project_ineligibility_type", "structure_id"],false)
 
-// Using group by 
+// Using group by on priority group create case-based sums expressed as columns 
 var elig = GroupBy(uApps,
   [{name: 'Priority Group', expression: 'priority_group'}],
   [{name: 'Eligible', expression: "CASE WHEN project_eligibility_status = 'Eligible' THEN 1 ELSE 0 END", statistic: 'SUM'},
